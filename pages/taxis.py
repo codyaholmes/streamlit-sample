@@ -98,7 +98,7 @@ df = duckdb.execute(
 # METRICS GROUP
 # -----------------------------------------------------------------------------
 
-metrics, raw_data = st.tabs(["Metrics", "Raw Data"])
+metrics, raw_data, pg_info = st.tabs(["Metrics", "Raw Data", "Page Info"])
 
 # Metric Calculations
 total_passengers = df["Passengers"].sum()
@@ -111,5 +111,76 @@ with metrics:
     metrics_row1.metric("Total Passengers", f"{total_passengers:,.0f}", border=True)
     metrics_row1.metric("Total Fares", f"${total_fare:,.0f}", border=True)
 
+    # -------------------------------------------------------------------------
+    # BOROUGH PICKUP/DROPOFF AGG TABLE GROUP
+    # -------------------------------------------------------------------------
+
+    title_info_ctr = st.container(horizontal_alignment="center")
+
+    with title_info_ctr.popover("🤔 Table Tips!", type="tertiary"):
+        st.markdown("""
+        - Hover over a column to find information about this metric.
+        - Click a column to sort ascendingly/descendingly. (Click multiple times to swap the method.)
+        - Data can be exported or made full screen by using the icons in the top right.
+        """)
+
+    borough_agg_ctr = st.container(horizontal=True)
+
+    borough_agg_query = """
+    SELECT
+        "Pickup Borough"
+        , "Dropoff Borough"
+        , COUNT(*) AS "Trips"
+        , SUM(Passengers) AS "Passengers"
+        , SUM(Fare) AS "Fares"
+        , SUM(Tip) AS "Tips"
+    FROM df
+    GROUP BY ALL;
+    """
+
+    borough_agg_df = duckdb.execute(borough_agg_query).df()
+    borough_agg_df["ATT"] = borough_agg_df["Tips"] / borough_agg_df["Trips"]
+
+    borough_agg_col_config = {
+        "Trips": st.column_config.NumberColumn(
+            help="The amount of taxi trips.", format="localized"
+        ),
+        "Passengers": st.column_config.NumberColumn(
+            help="The total amount of passengers taxied.", format="localized"
+        ),
+        "Fares": st.column_config.NumberColumn(
+            help="The total amount of taxi fares (in U.S. dollars).",
+            format="dollar",
+        ),
+        "Tips": st.column_config.NumberColumn(
+            help="The total amount of tips from customers (in U.S. dollars).",
+            format="dollar",
+        ),
+        "ATT": st.column_config.NumberColumn(
+            help="The Average Tip per Trip (ATT) amount.", format="dollar"
+        ),
+    }
+
+    borough_agg_ctr.dataframe(
+        borough_agg_df, hide_index=True, column_config=borough_agg_col_config
+    )
+
+
 with raw_data:
-    st.dataframe(df)
+    st.dataframe(df, hide_index=True)
+    st.write(f"{len(df):,.0f} row{'s' if len(df) != 1 else ''}")
+
+
+with pg_info:
+    st.markdown("""
+### Overview
+This dashboard provides an interactive view of NYC taxi trip activity. Use the filters at the top of the page to analyze trips between pickup and dropoff boroughs over a selected date range.
+
+The dashboard updates all metrics and tables automatically based on your selected filters.
+
+### Developer
+**Cody Holmes**  
+(915) 929-3006  
+[codyaholmes@outlook.com](mailto:codyaholmes@outlook.com)  
+*Reporting and Analytics*, Trace3
+""")
